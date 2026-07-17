@@ -140,11 +140,11 @@ current_names = [re.sub(r'^\d+[\.\)\]\s]+', '', name) for name in raw_lines]
 
 # 현재 입력된 인원과 우리가 설정한 총 자릿수를 비교해서 보여줍니다.
 if len(current_names) == total_seats:
-    st.sidebar.success(f"현재 입력된 인원: {len(current_names)}명 / 총 자릿수: {total_seats}석 (딱 맞습니다!)")
+    st.sidebar.success(f"현재 입력된 인원: {len(current_names)}명 / 총 자릿수: {total_seats}석")
 elif len(current_names) < total_seats:
-    st.sidebar.info(f"현재 입력된 인원: {len(current_names)}명 / 총 자릿수: {total_seats}석 (빈자리가 남게 됩니다.)")
+    st.sidebar.info(f"현재 입력된 인원: {len(current_names)}명 / 총 자릿수: {total_seats}석 (빈자리)")
 else:
-    st.sidebar.warning(f"현재 입력된 인원: {len(current_names)}명 / 총 자릿수: {total_seats}석 (자리가 부족합니다!)")
+    st.sidebar.warning(f"현재 입력된 인원: {len(current_names)}명 / 총 자릿수: {total_seats}석 (자리가 부족합니다)")
 
 # 명단 등록 및 초기화 버튼을 누르면 작동하는 부분입니다.
 if st.sidebar.button("명단 등록 및 초기화"):
