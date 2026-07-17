@@ -14,6 +14,7 @@ if "last_picked_idx" not in st.session_state:
     st.session_state.last_picked_idx = -1
 
 # 가운데 정렬 및 교탁에서 시작하는 이동 애니메이션 CSS 주입
+# 배경색을 스트림릿 다크모드와 유사한 검정 계열(#2b2b2b)로 수정
 st.markdown("""
 <style>
 .normal-seat {
@@ -27,29 +28,29 @@ st.markdown("""
     padding: 15px 0;
     animation: flyAndLand 2s ease-in-out forwards;
 }
-/* 교탁(가운데 위쪽)에서 시작해서 자리로 이동하는 애니메이션 (회색 박스) */
+/* 교탁(가운데 위쪽)에서 시작해서 자리로 이동하는 애니메이션 (검정 계열 박스) */
 @keyframes flyAndLand {
     0% {
         transform: translate(0, -40vh);
         opacity: 0;
-        background-color: #050505;
+        background-color: #2b2b2b;
         color: white;
         border-radius: 8px;
     }
     40% {
         transform: translate(0, -20vh) scale(1.5);
         opacity: 1;
-        background-color: #050505;
+        background-color: #2b2b2b;
         color: white;
         border-radius: 8px;
-        box-shadow: 0px 5px 15px rgba(0,0,0,0.3);
+        box-shadow: 0px 5px 15px rgba(0,0,0,0.5);
     }
     80% {
         transform: translate(0, 0) scale(1.1);
-        background-color: #050505;
+        background-color: #2b2b2b;
         color: white;
         border-radius: 8px;
-        box-shadow: 0px 2px 10px rgba(0,0,0,0.2);
+        box-shadow: 0px 2px 10px rgba(0,0,0,0.3);
     }
     100% {
         transform: translate(0, 0) scale(1);
@@ -76,12 +77,21 @@ def load_example_file():
     else:
         st.sidebar.error("같은 폴더에 example.txt 파일이 없습니다.")
 
+# 명단을 랜덤으로 섞는 함수
+def shuffle_names():
+    if "names_textarea" in st.session_state:
+        current_text = st.session_state["names_textarea"]
+        names_list = [name.strip() for name in current_text.split('\n') if name.strip()]
+        random.shuffle(names_list)
+        st.session_state["names_textarea"] = '\n'.join(names_list)
+
 # 왼쪽 사이드바 구성
 st.sidebar.title("이름 명단 입력")
 st.sidebar.write("총 22명의 이름을 줄바꿈으로 구분해서 입력해주세요.")
 
 st.sidebar.button("명단 불러오기 (students.txt)", on_click=load_students_file)
 st.sidebar.button("명단 불러오기 (example.txt)", on_click=load_example_file)
+st.sidebar.button("랜덤으로 섞기", on_click=shuffle_names)
 
 names_input = st.sidebar.text_area("명단", height=400, key="names_textarea")
 current_names = [name.strip() for name in names_input.split('\n') if name.strip()]
@@ -104,15 +114,12 @@ st.title("랜덤 자리 배치 프로그램")
 front_cols = st.columns([1, 2, 1, 1.5])
 
 with front_cols[1]:
-    # 이미지 크기를 50%로 줄이기 위해 HTML 태그 적용
-    st.markdown("<div style='text-align: center;'><img src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi4I4zFnoGWku6HlvRHMoq5lU_eTEQR51_U0Uc1aDC9yom6QiLmTHPwulXQcQ0-FbCR_OFSLLwX-qdM29tW-1nnom99XsEPOvdLezDdZXE27Qqj2Y4TMC2JbL1e7njxi5UX1iNyA9b93M8C/w1200-h630-p-k-no-nu/school_class_woman_aseru.png' style='width: 50%;'><br><span style='color: gray; font-size: 14px;'></span></div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center;'><img src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi4I4zFnoGWku6HlvRHMoq5lU_eTEQR51_U0Uc1aDC9yom6QiLmTHPwulXQcQ0-FbCR_OFSLLwX-qdM29tW-1nnom99XsEPOvdLezDdZXE27Qqj2Y4TMC2JbL1e7njxi5UX1iNyA9b93M8C/w1200-h630-p-k-no-nu/school_class_woman_aseru.png' style='width: 50%;'><br><span style='color: gray; font-size: 14px;'>칠판</span></div>", unsafe_allow_html=True)
 
 with front_cols[2]:
-    # 이미지 크기를 50%로 줄이기 위해 HTML 태그 적용
-    st.markdown("<div style='text-align: center;'><img src='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_DZA5M8KH80YmEcHxZxumZnYGPyDQNcD0fkFQe3Q39zmtrho&s' style='width: 50%;'><br><span style='color: gray; font-size: 14px;'></span></div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center;'><img src='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_DZA5M8KH80YmEcHxZxumZnYGPyDQNcD0fkFQe3Q39zmtrho&s' style='width: 50%;'><br><span style='color: gray; font-size: 14px;'>TV</span></div>", unsafe_allow_html=True)
 
 with front_cols[3]:
-    # 이미지 크기에 영향받지 않도록 4열에 버튼 배치
     st.write("")
     st.write("")
     if st.button("1명 랜덤 배치하기"):
