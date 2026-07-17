@@ -89,8 +89,8 @@ def shuffle_names():
 st.sidebar.title("이름 명단 입력")
 st.sidebar.write("총 22명의 이름을 줄바꿈으로 구분해서 입력해주세요.")
 
-st.sidebar.button("명단 불러오기 (students.txt)", on_click=load_students_file)
-st.sidebar.button("명단 불러오기 (example.txt)", on_click=load_example_file)
+st.sidebar.button("연수생 명단 불러오기 (students.txt)", on_click=load_students_file)
+st.sidebar.button("예시 명단 불러오기 (example.txt)", on_click=load_example_file)
 st.sidebar.button("랜덤으로 섞기", on_click=shuffle_names)
 
 names_input = st.sidebar.text_area("명단", height=400, key="names_textarea")
