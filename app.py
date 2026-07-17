@@ -100,33 +100,36 @@ if st.sidebar.button("명단 등록 및 초기화"):
 # 메인 화면 구성
 st.title("랜덤 자리 배치 프로그램")
 
-# 한 명씩 자리를 배치하는 버튼
-if st.button("1명 랜덤 배치하기"):
-    if st.session_state.remaining_names:
-        empty_seat_indices = [i for i, seat in enumerate(st.session_state.seats) if seat == "(빈자리)"]
-        
-        if empty_seat_indices:
-            person_index = random.randint(0, len(st.session_state.remaining_names) - 1)
-            person = st.session_state.remaining_names.pop(person_index)
-            
-            seat_index = random.choice(empty_seat_indices)
-            st.session_state.seats[seat_index] = person
-            
-            st.session_state.last_picked_idx = seat_index
-    else:
-        st.warning("모든 인원이 자리에 배치되었습니다.")
-        st.session_state.last_picked_idx = -1
+# 1행 앞쪽 공간 설정: 빈공간(1열), 칠판(2열), TV(3열), 버튼(4열)
+front_cols = st.columns([1, 2, 1, 1.5])
 
-st.write("---")
-
-# 1행 앞쪽 (칠판 및 TV 배치)
-front_cols = st.columns([1, 2, 1])
 with front_cols[1]:
-    st.image("https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi4I4zFnoGWku6HlvRHMoq5lU_eTEQR51_U0Uc1aDC9yom6QiLmTHPwulXQcQ0-FbCR_OFSLLwX-qdM29tW-1nnom99XsEPOvdLezDdZXE27Qqj2Y4TMC2JbL1e7njxi5UX1iNyA9b93M8C/w1200-h630-p-k-no-nu/school_class_woman_aseru.png", use_container_width=True)
-    st.markdown("<div style='text-align: center; color: gray; font-size: 14px;'>칠판</div>", unsafe_allow_html=True)
+    # 이미지 크기를 50%로 줄이기 위해 HTML 태그 적용
+    st.markdown("<div style='text-align: center;'><img src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi4I4zFnoGWku6HlvRHMoq5lU_eTEQR51_U0Uc1aDC9yom6QiLmTHPwulXQcQ0-FbCR_OFSLLwX-qdM29tW-1nnom99XsEPOvdLezDdZXE27Qqj2Y4TMC2JbL1e7njxi5UX1iNyA9b93M8C/w1200-h630-p-k-no-nu/school_class_woman_aseru.png' style='width: 50%;'><br><span style='color: gray; font-size: 14px;'>칠판</span></div>", unsafe_allow_html=True)
+
 with front_cols[2]:
-    st.image("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_DZA5M8KH80YmEcHxZxumZnYGPyDQNcD0fkFQe3Q39zmtrho&s", use_container_width=True)
-    st.markdown("<div style='text-align: center; color: gray; font-size: 14px;'>TV</div>", unsafe_allow_html=True)
+    # 이미지 크기를 50%로 줄이기 위해 HTML 태그 적용
+    st.markdown("<div style='text-align: center;'><img src='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_DZA5M8KH80YmEcHxZxumZnYGPyDQNcD0fkFQe3Q39zmtrho&s' style='width: 50%;'><br><span style='color: gray; font-size: 14px;'>TV</span></div>", unsafe_allow_html=True)
+
+with front_cols[3]:
+    # 이미지 크기에 영향받지 않도록 4열에 버튼 배치
+    st.write("")
+    st.write("")
+    if st.button("1명 랜덤 배치하기"):
+        if st.session_state.remaining_names:
+            empty_seat_indices = [i for i, seat in enumerate(st.session_state.seats) if seat == "(빈자리)"]
+            
+            if empty_seat_indices:
+                person_index = random.randint(0, len(st.session_state.remaining_names) - 1)
+                person = st.session_state.remaining_names.pop(person_index)
+                
+                seat_index = random.choice(empty_seat_indices)
+                st.session_state.seats[seat_index] = person
+                
+                st.session_state.last_picked_idx = seat_index
+        else:
+            st.warning("모든 인원이 자리에 배치되었습니다.")
+            st.session_state.last_picked_idx = -1
 
 st.write("---")
 
