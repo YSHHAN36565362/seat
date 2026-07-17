@@ -73,7 +73,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# * 변경사항: 이름 앞에 붙어있는 숫자 기호들을 모두 지운 뒤, 1번부터 차례대로 깔끔하게 번호를 다시 붙여주는 함수입니다.
+# 이름 앞에 붙어있는 숫자 기호들을 모두 지운 뒤, 1번부터 차례대로 깔끔하게 번호를 다시 붙여주는 함수입니다.
 def format_names_with_numbers(text):
     # 빈 줄을 제외하고 글자들을 가져옵니다.
     lines = [line for line in text.split('\n') if line.strip()]
@@ -83,7 +83,7 @@ def format_names_with_numbers(text):
     numbered_lines = [f"{i+1}. {name}" for i, name in enumerate(cleaned_lines)]
     return '\n'.join(numbered_lines)
 
-# * 변경사항: 텍스트 입력창에서 글자를 고치고 바깥을 클릭했을 때 자동으로 번호를 다시 정렬해주는 기능입니다.
+# 텍스트 입력창에서 글자를 고치고 바깥을 클릭했을 때 자동으로 번호를 다시 정렬해주는 기능입니다.
 def on_text_area_change():
     if "names_textarea" in st.session_state:
         st.session_state["names_textarea"] = format_names_with_numbers(st.session_state["names_textarea"])
@@ -91,7 +91,6 @@ def on_text_area_change():
 def load_students_file():
     if os.path.exists("students.txt"):
         with open("students.txt", "r", encoding="utf-8") as f:
-            # * 변경사항: 파일에서 글자를 불러올 때도 자동으로 번호를 붙이도록 수정했습니다.
             st.session_state["names_textarea"] = format_names_with_numbers(f.read())
     else:
         st.sidebar.error("같은 폴더에 students.txt 파일이 없습니다.")
@@ -99,7 +98,6 @@ def load_students_file():
 def load_example_file():
     if os.path.exists("example.txt"):
         with open("example.txt", "r", encoding="utf-8") as f:
-            # * 변경사항: 파일에서 글자를 불러올 때도 자동으로 번호를 붙이도록 수정했습니다.
             st.session_state["names_textarea"] = format_names_with_numbers(f.read())
     else:
         st.sidebar.error("같은 폴더에 example.txt 파일이 없습니다.")
@@ -109,17 +107,17 @@ def shuffle_names():
         raw_text = st.session_state["names_textarea"]
         lines = [line for line in raw_text.split('\n') if line.strip()]
         
-        # * 변경사항: 순서를 섞기 전에 먼저 번호를 떼어냅니다.
+        # 순서를 섞기 전에 먼저 번호를 떼어냅니다.
         cleaned_lines = [re.sub(r'^\d+[\.\)\]\s]+', '', line.strip()) for line in lines]
         
         # 순서를 마구 섞어줍니다.
         random.shuffle(cleaned_lines)
         
-        # * 변경사항: 순서가 섞인 상태로 다시 1번부터 번호를 새로 붙여줍니다.
+        # 순서가 섞인 상태로 다시 1번부터 번호를 새로 붙여줍니다.
         numbered_lines = [f"{i+1}. {name}" for i, name in enumerate(cleaned_lines)]
         st.session_state["names_textarea"] = '\n'.join(numbered_lines)
 
-# * 변경사항: 화면 왼쪽에 다른 탭으로 넘어갈 수 있는 메뉴 버튼을 새로 만들었습니다.
+# 화면 왼쪽에 다른 탭으로 넘어갈 수 있는 메뉴 버튼을 새로 만들었습니다.
 st.sidebar.title("메뉴 선택")
 menu = st.sidebar.radio("원하시는 작업을 선택해주세요.", ["자리 배치 프로그램", "명단 랜덤 뽑기"])
 
@@ -133,10 +131,10 @@ st.sidebar.button("명단 불러오기 (students.txt)", on_click=load_students_f
 st.sidebar.button("명단 불러오기 (example.txt)", on_click=load_example_file)
 st.sidebar.button("랜덤으로 섞기", on_click=shuffle_names)
 
-# * 변경사항: 텍스트 박스에 on_change를 넣어서, 내용을 고친 뒤 마우스로 다른 곳을 클릭하면 자동으로 번호가 매겨집니다.
+# 텍스트 박스에 on_change를 넣어서, 내용을 고친 뒤 마우스로 다른 곳을 클릭하면 자동으로 번호가 매겨집니다.
 names_input = st.sidebar.text_area("명단", height=400, key="names_textarea", on_change=on_text_area_change)
 
-# * 변경사항: 자리 배치나 랜덤 뽑기를 할 때는 화면의 1. 2. 등의 숫자가 보이지 않도록 숫자를 제거한 이름만 골라냅니다.
+# 자리 배치나 랜덤 뽑기를 할 때는 화면의 1. 2. 등의 숫자가 보이지 않도록 숫자를 제거한 이름만 골라냅니다.
 raw_lines = [name.strip() for name in names_input.split('\n') if name.strip()]
 current_names = [re.sub(r'^\d+[\.\)\]\s]+', '', name) for name in raw_lines]
 
@@ -159,7 +157,7 @@ if st.sidebar.button("명단 등록 및 초기화"):
     else:
         st.sidebar.error(f"자릿수({total_seats}석)보다 많은 인원({len(current_names)}명)이 입력되었습니다. 자리를 늘리거나 인원을 줄여주세요.")
 
-# * 변경사항: 왼쪽 메뉴에서 선택한 탭에 따라 중앙 화면의 모습을 다르게 보여주도록 나누었습니다.
+# 왼쪽 메뉴에서 선택한 탭에 따라 중앙 화면의 모습을 다르게 보여주도록 나누었습니다.
 
 if menu == "자리 배치 프로그램":
     # ------------------ 자리 배치 프로그램 탭 ------------------
@@ -196,21 +194,50 @@ if menu == "자리 배치 프로그램":
     with front_cols[2]:
         st.markdown("<div style='text-align: center;'><img src='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_DZA5M8KH80YmEcHxZxumZnYGPyDQNcD0fkFQe3Q39zmtrho&s' style='width: 50%;'><br><span style='color: gray; font-size: 14px;'>TV</span></div>", unsafe_allow_html=True)
 
+    # * 변경사항: 1명 랜덤 배치 버튼 옆에 모두 랜덤 배치 버튼을 나란히 놓기 위해 내부 열을 2개로 나누었습니다.
     with front_cols[3]:
         st.write("")
         st.write("")
-        if st.button("1명 랜덤 배치하기"):
-            if st.session_state.remaining_names:
-                empty_seat_indices = [i for i, seat in enumerate(st.session_state.seats) if seat == "(빈자리)"]
-                if empty_seat_indices:
-                    person_index = random.randint(0, len(st.session_state.remaining_names) - 1)
-                    person = st.session_state.remaining_names.pop(person_index)
-                    seat_index = random.choice(empty_seat_indices)
-                    st.session_state.seats[seat_index] = person
-                    st.session_state.last_picked_idx = seat_index
-            else:
-                st.warning("모든 인원이 자리에 배치되었습니다.")
-                st.session_state.last_picked_idx = -1
+        btn_cols = st.columns(2)
+        
+        with btn_cols[0]:
+            if st.button("1명 랜덤 배치"):
+                if st.session_state.remaining_names:
+                    empty_seat_indices = [i for i, seat in enumerate(st.session_state.seats) if seat == "(빈자리)"]
+                    if empty_seat_indices:
+                        person_index = random.randint(0, len(st.session_state.remaining_names) - 1)
+                        person = st.session_state.remaining_names.pop(person_index)
+                        seat_index = random.choice(empty_seat_indices)
+                        st.session_state.seats[seat_index] = person
+                        st.session_state.last_picked_idx = seat_index
+                else:
+                    st.warning("모든 인원이 자리에 배치되었습니다.")
+                    st.session_state.last_picked_idx = -1
+                    
+        with btn_cols[1]:
+            # * 변경사항: 명단에 남은 인원 전체를 빈자리에 한 번에 무작위로 배치하는 기능을 추가했습니다.
+            if st.button("모두 랜덤 배치"):
+                if st.session_state.remaining_names:
+                    # 현재 빈자리의 번호를 모두 찾습니다.
+                    empty_seat_indices = [i for i, seat in enumerate(st.session_state.seats) if seat == "(빈자리)"]
+                    if empty_seat_indices:
+                        # 남은 사람 수와 빈자리 수 중에서 더 적은 숫자만큼만 배치를 진행합니다.
+                        place_count = min(len(st.session_state.remaining_names), len(empty_seat_indices))
+                        
+                        # 배치할 사람과 배치될 자리를 각각 한 번에 필요한 만큼 무작위로 뽑습니다.
+                        picked_people = random.sample(st.session_state.remaining_names, place_count)
+                        picked_seats = random.sample(empty_seat_indices, place_count)
+                        
+                        # 뽑힌 사람들을 뽑힌 자리에 순서대로 하나씩 넣어줍니다.
+                        for i in range(place_count):
+                            st.session_state.seats[picked_seats[i]] = picked_people[i]
+                            st.session_state.remaining_names.remove(picked_people[i])
+                            
+                        # 여러 명이 한 번에 배치되므로 마지막에 배치된 사람의 자리 번호를 저장해 애니메이션 효과를 줍니다.
+                        st.session_state.last_picked_idx = picked_seats[-1]
+                else:
+                    st.warning("모든 인원이 자리에 배치되었습니다.")
+                    st.session_state.last_picked_idx = -1
 
     st.write("---")
 
