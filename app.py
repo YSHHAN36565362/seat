@@ -32,21 +32,21 @@ st.markdown("""
     0% {
         transform: translate(0, -40vh);
         opacity: 0;
-        background-color: #808080;
+        background-color: #050505;
         color: white;
         border-radius: 8px;
     }
     40% {
         transform: translate(0, -20vh) scale(1.5);
         opacity: 1;
-        background-color: #808080;
+        background-color: #050505;
         color: white;
         border-radius: 8px;
         box-shadow: 0px 5px 15px rgba(0,0,0,0.3);
     }
     80% {
         transform: translate(0, 0) scale(1.1);
-        background-color: #808080;
+        background-color: #050505;
         color: white;
         border-radius: 8px;
         box-shadow: 0px 2px 10px rgba(0,0,0,0.2);
