@@ -14,7 +14,7 @@ if "row_pairs" not in st.session_state:
 total_seats = sum(st.session_state.row_pairs) * 2
 
 # 프로그램이 다시 실행되어도 데이터가 날아가지 않도록 세션 상태에 저장해둡니다.
-# 22라는 숫자 대신, 계산된 total_seats 변수를 사용하여 빈자리를 만듭니다.
+# 계산된 total_seats 변수를 사용하여 빈자리를 만듭니다.
 if "seats" not in st.session_state or len(st.session_state.seats) != total_seats:
     st.session_state.seats = ["(빈자리)"] * total_seats
 
@@ -103,8 +103,7 @@ def shuffle_names():
 
 # 화면 왼쪽에 있는 사이드바 메뉴를 만듭니다.
 st.sidebar.title("이름 명단 입력")
-# 22명이라고 고정된 글자 대신, 계산된 total_seats 변수를 보여줍니다.
-st.sidebar.write(f"총 {total_seats}명의 이름을 줄바꿈으로 구분해서 입력해주세요.")
+st.sidebar.write(f"총 {total_seats}석의 자리가 준비되어 있습니다. 이름을 줄바꿈으로 구분해서 입력해주세요.")
 
 # 사이드바에 명단 불러오기 버튼과 랜덤 섞기 버튼을 배치합니다.
 st.sidebar.button("명단 불러오기 (students.txt)", on_click=load_students_file)
@@ -112,29 +111,33 @@ st.sidebar.button("명단 불러오기 (example.txt)", on_click=load_example_fil
 st.sidebar.button("랜덤으로 섞기", on_click=shuffle_names)
 
 # 이름을 직접 입력할 수도 있는 텍스트 박스입니다.
+# * 입력 후 바탕화면을 클릭하면 아래의 줄 수 계산이 즉시 새로고침됩니다.
 names_input = st.sidebar.text_area("명단", height=400, key="names_textarea")
 
 # 입력창에 써진 이름이 총 몇 명인지 계산해서 화면에 보여줍니다.
 current_names = [name.strip() for name in names_input.split('\n') if name.strip()]
 
-# * 변경사항: 현재 입력된 줄 수(명단 수)와 우리가 설정한 총 필요 인원을 한눈에 비교할 수 있도록 안내창을 추가했습니다.
-# 입력된 인원과 필요한 인원이 같으면 초록색 성공 메시지를 띄웁니다.
+# 현재 입력된 줄 수(명단 수)와 우리가 설정한 총 자릿수를 비교해서 보여줍니다.
 if len(current_names) == total_seats:
-    st.sidebar.success(f"현재 입력된 줄 수: {len(current_names)}명 / 필요 인원: {total_seats}명 (딱 맞습니다!)")
-# 다르면 노란색 경고 메시지를 띄워 몇 줄이 부족하거나 남는지 알 수 있게 합니다.
+    st.sidebar.success(f"현재 입력된 인원: {len(current_names)}명 / 총 자릿수: {total_seats}석 (딱 맞습니다!)")
+elif len(current_names) < total_seats:
+    # * 변경사항: 인원이 부족해도 빈자리를 남겨두고 진행할 수 있도록 안내 문구를 초록색 정보창으로 바꿨습니다.
+    st.sidebar.info(f"현재 입력된 인원: {len(current_names)}명 / 총 자릿수: {total_seats}석 (빈자리가 남게 됩니다.)")
 else:
-    st.sidebar.warning(f"현재 입력된 줄 수: {len(current_names)}명 / 필요 인원: {total_seats}명")
+    st.sidebar.warning(f"현재 입력된 인원: {len(current_names)}명 / 총 자릿수: {total_seats}석 (자리가 부족합니다!)")
 
 # 명단 등록 및 초기화 버튼을 누르면 작동하는 부분입니다.
 if st.sidebar.button("명단 등록 및 초기화"):
-    # 입력된 인원이 현재 설정된 총 자리수와 맞는지 확인합니다.
-    if len(current_names) == total_seats:
+    # * 변경사항: 인원이 자릿수와 정확히 맞지 않고, 자릿수보다 적거나 같기만 하면 등록되도록 조건을 완화했습니다.
+    if len(current_names) <= total_seats:
         st.session_state.remaining_names = current_names.copy()
         st.session_state.seats = ["(빈자리)"] * total_seats
         st.session_state.last_picked_idx = -1
-        st.sidebar.success(f"{total_seats}명의 명단이 성공적으로 등록되었습니다.")
+        # * 변경사항: 등록 성공 시 총 00명 등록되었습니다 라는 메시지를 띄웁니다.
+        st.sidebar.success(f"총 {len(current_names)}명 등록되었습니다.")
     else:
-        st.sidebar.error(f"현재 {len(current_names)}명이 입력되었습니다. 정확히 {total_seats}명을 입력해야 합니다.")
+        # 인원이 자리보다 많을 때만 에러를 띄웁니다.
+        st.sidebar.error(f"자릿수({total_seats}석)보다 많은 인원({len(current_names)}명)이 입력되었습니다. 자리를 늘리거나 인원을 줄여주세요.")
 
 # 메인 화면의 윗부분을 화면 비율 7대 3으로 나누어 제목과 설정 창을 분리합니다.
 title_col, config_col = st.columns([7, 3])
@@ -154,14 +157,12 @@ with config_col:
         temp_pairs = []
         # 위에서 입력한 줄의 수만큼 반복해서 각 줄의 짝꿍 수를 입력받습니다.
         for i in range(temp_rows):
-            # 기존에 설정된 값이 있으면 가져오고, 새로 생긴 줄이면 기본으로 4쌍을 채워줍니다.
             default_val = st.session_state.row_pairs[i] if i < len(st.session_state.row_pairs) else 4
             val = st.number_input(f"{i+1}행 짝꿍 수", min_value=1, max_value=10, value=default_val)
             temp_pairs.append(val)
             
         # 설정 적용 버튼을 눌렀을 때 실행되는 과정입니다.
         if st.button("설정 적용 및 초기화"):
-            # 새롭게 설정한 각 줄의 짝꿍 수 정보를 저장합니다.
             st.session_state.row_pairs = temp_pairs
             
             # 자리 설정이 바뀌었으므로 모든 기록을 지우고 화면을 완전히 새로고침합니다.
@@ -182,7 +183,7 @@ with front_cols[1]:
 with front_cols[2]:
     st.markdown("<div style='text-align: center;'><img src='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_DZA5M8KH80YmEcHxZxumZnYGPyDQNcD0fkFQe3Q39zmtrho&s' style='width: 50%;'><br><span style='color: gray; font-size: 14px;'>TV</span></div>", unsafe_allow_html=True)
 
-# 네 번째 열에는 1명씩 배치하는 동작 버튼을 넣습니다.
+# 네 번째 열에는 1명씩 배치하는 동작 버튼과 랜덤 뽑기 기능 버튼을 넣습니다.
 with front_cols[3]:
     st.write("")
     st.write("")
@@ -190,7 +191,7 @@ with front_cols[3]:
     if st.button("1명 랜덤 배치하기"):
         # 남은 사람이 있는지 확인합니다.
         if st.session_state.remaining_names:
-            # 22개의 자리 중에서 현재 (빈자리)라고 적힌 곳의 번호만 찾아냅니다.
+            # 전체 자리 중에서 현재 (빈자리)라고 적힌 곳의 번호만 찾아냅니다.
             empty_seat_indices = [i for i, seat in enumerate(st.session_state.seats) if seat == "(빈자리)"]
             
             # 빈자리가 남아있다면 배치를 시작합니다.
@@ -211,6 +212,26 @@ with front_cols[3]:
             # 남은 사람이 없으면 경고 메시지를 띄웁니다.
             st.warning("모든 인원이 자리에 배치되었습니다.")
             st.session_state.last_picked_idx = -1
+
+    # * 변경사항: 1명 랜덤 배치하기 아래쪽에 명단에서 특정 인원만큼 무작위로 뽑는 기능을 추가했습니다.
+    st.write("---")
+    st.write("명단 랜덤 뽑기")
+    
+    # 뽑을 인원을 + - 버튼으로 조절할 수 있도록 합니다. 남은 인원보다 많이 뽑을 수 없도록 최대값을 설정합니다.
+    max_draw = len(st.session_state.remaining_names) if len(st.session_state.remaining_names) > 0 else 1
+    draw_count = st.number_input("뽑을 인원", min_value=1, max_value=max_draw, value=1, step=1)
+    
+    # 랜덤으로 뽑기 버튼을 누르면 작동합니다.
+    if st.button("랜덤으로 뽑기"):
+        if st.session_state.remaining_names:
+            if draw_count <= len(st.session_state.remaining_names):
+                # 파이썬의 sample 기능을 사용하면 지정한 명단에서 원하는 숫자만큼 중복 없이 사람을 뽑아줍니다.
+                picked_people = random.sample(st.session_state.remaining_names, draw_count)
+                st.success(f"선택된 인원: {', '.join(picked_people)}")
+            else:
+                st.warning("명단에 남은 인원보다 많이 뽑을 수 없습니다.")
+        else:
+            st.warning("명단에 남은 인원이 없습니다.")
 
 # 구분선을 하나 그어줍니다.
 st.write("---")
