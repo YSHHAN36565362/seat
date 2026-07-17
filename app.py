@@ -234,7 +234,7 @@ if menu == "자리 배치 프로그램":
                             st.session_state.remaining_names.remove(picked_people[i])
                             
                         # 여러 명이 한 번에 배치되므로 마지막에 배치된 사람의 자리 번호를 저장해 애니메이션 효과를 줍니다.
-                        st.session_state.last_picked_idx = picked_seats[-1]
+                        
                 else:
                     st.warning("모든 인원이 자리에 배치되었습니다.")
                     st.session_state.last_picked_idx = -1
