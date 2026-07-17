@@ -5,16 +5,16 @@ import os
 # 웹사이트의 탭 이름과 화면을 넓게 쓰도록 기본 설정을 해줍니다.
 st.set_page_config(page_title="랜덤 자리 배치", layout="wide")
 
-# * 변경사항: 각 줄에 몇 쌍이 앉을지 기억하는 변수를 새로 만들었습니다. 
+# 각 줄에 몇 쌍이 앉을지 기억하는 변수를 새로 만들었습니다. 
 # 기본값으로 1행 4쌍, 2행 4쌍, 3행 3쌍을 설정합니다.
 if "row_pairs" not in st.session_state:
     st.session_state.row_pairs = [4, 4, 3]
 
-# * 변경사항: 설정된 짝꿍 수에 곱하기 2를 해서 총 몇 명인지 계산합니다.
+# 설정된 짝꿍 수에 곱하기 2를 해서 총 몇 명인지 계산합니다.
 total_seats = sum(st.session_state.row_pairs) * 2
 
 # 프로그램이 다시 실행되어도 데이터가 날아가지 않도록 세션 상태에 저장해둡니다.
-# * 변경사항: 22라는 숫자 대신, 계산된 total_seats 변수를 사용하여 빈자리를 만듭니다.
+# 22라는 숫자 대신, 계산된 total_seats 변수를 사용하여 빈자리를 만듭니다.
 if "seats" not in st.session_state or len(st.session_state.seats) != total_seats:
     st.session_state.seats = ["(빈자리)"] * total_seats
 
@@ -103,7 +103,7 @@ def shuffle_names():
 
 # 화면 왼쪽에 있는 사이드바 메뉴를 만듭니다.
 st.sidebar.title("이름 명단 입력")
-# * 변경사항: 22명이라고 고정된 글자 대신, 계산된 total_seats 변수를 보여줍니다.
+# 22명이라고 고정된 글자 대신, 계산된 total_seats 변수를 보여줍니다.
 st.sidebar.write(f"총 {total_seats}명의 이름을 줄바꿈으로 구분해서 입력해주세요.")
 
 # 사이드바에 명단 불러오기 버튼과 랜덤 섞기 버튼을 배치합니다.
@@ -116,11 +116,18 @@ names_input = st.sidebar.text_area("명단", height=400, key="names_textarea")
 
 # 입력창에 써진 이름이 총 몇 명인지 계산해서 화면에 보여줍니다.
 current_names = [name.strip() for name in names_input.split('\n') if name.strip()]
-st.sidebar.write(f"현재 입력된 인원: {len(current_names)}명")
+
+# * 변경사항: 현재 입력된 줄 수(명단 수)와 우리가 설정한 총 필요 인원을 한눈에 비교할 수 있도록 안내창을 추가했습니다.
+# 입력된 인원과 필요한 인원이 같으면 초록색 성공 메시지를 띄웁니다.
+if len(current_names) == total_seats:
+    st.sidebar.success(f"현재 입력된 줄 수: {len(current_names)}명 / 필요 인원: {total_seats}명 (딱 맞습니다!)")
+# 다르면 노란색 경고 메시지를 띄워 몇 줄이 부족하거나 남는지 알 수 있게 합니다.
+else:
+    st.sidebar.warning(f"현재 입력된 줄 수: {len(current_names)}명 / 필요 인원: {total_seats}명")
 
 # 명단 등록 및 초기화 버튼을 누르면 작동하는 부분입니다.
 if st.sidebar.button("명단 등록 및 초기화"):
-    # * 변경사항: 입력된 인원이 현재 설정된 총 자리수와 맞는지 확인합니다.
+    # 입력된 인원이 현재 설정된 총 자리수와 맞는지 확인합니다.
     if len(current_names) == total_seats:
         st.session_state.remaining_names = current_names.copy()
         st.session_state.seats = ["(빈자리)"] * total_seats
@@ -129,7 +136,7 @@ if st.sidebar.button("명단 등록 및 초기화"):
     else:
         st.sidebar.error(f"현재 {len(current_names)}명이 입력되었습니다. 정확히 {total_seats}명을 입력해야 합니다.")
 
-# * 변경사항: 메인 화면의 윗부분을 화면 비율 7대 3으로 나누어 제목과 설정 창을 분리합니다.
+# 메인 화면의 윗부분을 화면 비율 7대 3으로 나누어 제목과 설정 창을 분리합니다.
 title_col, config_col = st.columns([7, 3])
 
 with title_col:
@@ -137,7 +144,7 @@ with title_col:
     st.title("랜덤 자리 배치 프로그램")
 
 with config_col:
-    # * 변경사항: 화면 오른쪽 위에 클릭하면 아래로 펼쳐지는 설정 창을 만듭니다.
+    # 화면 오른쪽 위에 클릭하면 아래로 펼쳐지는 설정 창을 만듭니다.
     with st.expander("자리 배치 설정 (클릭)"):
         st.write("각 줄에 몇 쌍(2명=1쌍)이 앉을지 수정할 수 있습니다.")
         
@@ -240,7 +247,7 @@ def draw_row(start_idx, pair_count):
             inner_cols[0].markdown(f"<div class='{seat1_class}'>{st.session_state.seats[seat1_idx]}</div>", unsafe_allow_html=True)
             inner_cols[1].markdown(f"<div class='{seat2_class}'>{st.session_state.seats[seat2_idx]}</div>", unsafe_allow_html=True)
 
-# * 변경사항: 1행, 2행을 고정해서 쓰지 않고, 설정된 줄 수에 맞춰서 자동으로 그려주도록 수정했습니다.
+# 1행, 2행을 고정해서 쓰지 않고, 설정된 줄 수에 맞춰서 자동으로 그려주도록 수정했습니다.
 start_idx = 0
 for i, pair_count in enumerate(st.session_state.row_pairs):
     # 각 줄의 번호를 출력합니다.
