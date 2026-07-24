@@ -25,6 +25,7 @@ if "last_picked_idx" not in st.session_state:
     st.session_state.last_picked_idx = -1
 
 # {이름: [자리인덱스, ...]} 형태로 저장되는 좌석 제약 조건입니다.
+# 이 딕셔너리 하나만이 조건의 유일한 저장소(single source of truth)입니다.
 if "seat_constraints" not in st.session_state:
     st.session_state.seat_constraints = {}
 
@@ -162,10 +163,9 @@ def assign_people(people_to_place, empty_seat_indices):
 
     return assignments, unplaced
 
-# 좌석 배치도를 화면에 그려주는 공용 함수입니다.
-# mode="view" 이면 배정된 사람 이름만 보여주고,
-# mode="edit" 이면 자리마다 체크박스를 넣어 제약 조건 편집에 사용합니다.
-def draw_seat_grid(mode="view", target_name=None):
+# 좌석 배치도를 화면에 그려주는 공용 함수입니다. (보기 전용)
+# 조건 관리 탭에서도 이 함수를 그대로 재사용해서 자리 번호와 현재 조건 상태를 보여줍니다.
+def draw_seat_grid(highlight_name=None):
     start_idx = 0
     for row_i, pair_count in enumerate(st.session_state.row_pairs):
         st.markdown(f"**{row_i + 1}행**")
@@ -185,29 +185,21 @@ def draw_seat_grid(mode="view", target_name=None):
 
                 for local_idx, seat_idx in [(0, seat1_idx), (1, seat2_idx)]:
                     with inner_cols[local_idx]:
-                        if mode == "view":
-                            seat_class = "animated-seat" if st.session_state.last_picked_idx == seat_idx else "normal-seat"
-                            st.markdown(f"<div class='{seat_class}'>{st.session_state.seats[seat_idx]}</div>", unsafe_allow_html=True)
-                            st.markdown(f"<div class='seat-number'>#{seat_idx + 1}</div>", unsafe_allow_html=True)
-                        else:
-                            occupant = st.session_state.seats[seat_idx]
-                            key = f"cst_{target_name}_{seat_idx}"
-                            if key not in st.session_state:
-                                existing = st.session_state.seat_constraints.get(target_name, [])
-                                st.session_state[key] = seat_idx in existing
+                        seat_class = "animated-seat" if st.session_state.last_picked_idx == seat_idx else "normal-seat"
+                        st.markdown(f"<div class='{seat_class}'>{st.session_state.seats[seat_idx]}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div class='seat-number'>#{seat_idx + 1}</div>", unsafe_allow_html=True)
 
-                            st.checkbox(f"{seat_idx + 1}번", key=key)
+                        # 이 자리를 누가 조건으로 지정해뒀는지 찾아서 표시합니다.
+                        owner = None
+                        for owner_name, seat_list in st.session_state.seat_constraints.items():
+                            if seat_idx in seat_list:
+                                owner = owner_name
+                                break
 
-                            other_owner = None
-                            for owner_name, seat_list in st.session_state.seat_constraints.items():
-                                if owner_name != target_name and seat_idx in seat_list:
-                                    other_owner = owner_name
-                                    break
-
-                            if other_owner:
-                                st.markdown(f"<div class='seat-tag-other'>{other_owner} 지정됨</div>", unsafe_allow_html=True)
-                            elif occupant != "(빈자리)":
-                                st.markdown(f"<div class='seat-number'>{occupant} 배정됨</div>", unsafe_allow_html=True)
+                        if owner == highlight_name:
+                            st.markdown(f"<div class='seat-tag-mine'>선택됨</div>", unsafe_allow_html=True)
+                        elif owner is not None:
+                            st.markdown(f"<div class='seat-tag-other'>{owner} 지정</div>", unsafe_allow_html=True)
 
         start_idx += pair_count * 2
 
@@ -297,6 +289,8 @@ if menu == "자리 배치 프로그램":
                             st.session_state.seats[seat_idx] = name
                             st.session_state.remaining_names.remove(person)
                             st.session_state.last_picked_idx = seat_idx
+                            if name in st.session_state.seat_constraints:
+                                st.info(f"'{name}'님은 지정 조건에 따라 #{seat_idx + 1}번 자리에 배치되었습니다.")
                         else:
                             st.warning(f"'{person[1]}'님의 지정 좌석이 모두 차 있어 배치할 수 없습니다.")
                     else:
@@ -327,7 +321,7 @@ if menu == "자리 배치 프로그램":
                     st.session_state.last_picked_idx = -1
 
     st.write("---")
-    draw_seat_grid(mode="view")
+    draw_seat_grid()
 
 elif menu == "명단 랜덤 뽑기":
     st.title("명단 랜덤 뽑기")
@@ -351,7 +345,7 @@ elif menu == "명단 랜덤 뽑기":
 else:
     # ------------------ 좌석 제약 조건 관리 탭 ------------------
     st.title("좌석 제약 조건 관리")
-    st.write("아래 실제 좌석 배치도에서 체크박스로 후보 자리를 선택하면, 그 사람은 선택된 자리 중 하나에만 랜덤 배치됩니다.")
+    st.write("아래 좌석 배치도에서 자리 번호를 확인한 뒤, 원하는 자리 번호를 멀티셀렉트에서 골라 조건을 저장하세요.")
     st.write("---")
 
     unique_names = sorted(set([name for _, name in st.session_state.remaining_names])) if st.session_state.remaining_names else sorted(set(current_names))
@@ -359,39 +353,54 @@ else:
     if not unique_names:
         st.info("먼저 사이드바에서 명단을 입력하고 등록해주세요.")
     else:
-        target_name = st.selectbox("조건을 설정할 사람", unique_names)
+        target_name = st.selectbox("조건을 설정할 사람", unique_names, key="constraint_target_select")
 
-        st.write(f"**'{target_name}'** 님이 앉을 수 있는 자리를 체크하세요. (여러 개 선택 가능, 그중 하나에 랜덤 배치됨)")
-        st.write("")
-
-        # 실제 배치도와 동일한 모양으로 체크박스 그리드를 그립니다.
-        draw_seat_grid(mode="edit", target_name=target_name)
+        st.write(f"**'{target_name}'** 님이 앉을 수 있는 자리를 아래 배치도에서 확인하세요. (초록색 '선택됨'은 이 사람에게 이미 지정된 자리, 빨간색은 다른 사람에게 지정된 자리입니다.)")
+        draw_seat_grid(highlight_name=target_name)
 
         st.write("---")
+
+        # 이미 다른 사람에게 지정된 자리는 선택할 수 없도록 옵션에서 제외합니다.
+        taken_by_others = set()
+        for owner_name, seat_list in st.session_state.seat_constraints.items():
+            if owner_name != target_name:
+                taken_by_others.update(seat_list)
+
+        selectable_seats = [s for s in range(total_seats) if s not in taken_by_others]
+        seat_label_map = {s: f"{s + 1}번" for s in selectable_seats}
+
+        current_selection = [
+            s for s in st.session_state.seat_constraints.get(target_name, [])
+            if s in selectable_seats
+        ]
+
+        chosen_seats = st.multiselect(
+            "허용할 후보 자리 번호 (이 중 하나에 랜덤 배치됩니다)",
+            options=selectable_seats,
+            default=current_selection,
+            format_func=lambda s: seat_label_map[s],
+            key=f"multiselect_{target_name}"
+        )
+
         save_col, clear_col = st.columns(2)
 
         with save_col:
-            if st.button("조건 저장"):
-                chosen_seats = [
-                    seat_idx for seat_idx in range(total_seats)
-                    if st.session_state.get(f"cst_{target_name}_{seat_idx}", False)
-                ]
+            if st.button("조건 저장", key="save_constraint_btn"):
                 if chosen_seats:
-                    st.session_state.seat_constraints[target_name] = chosen_seats
+                    st.session_state.seat_constraints[target_name] = list(chosen_seats)
                     seat_display = ", ".join([str(s + 1) for s in chosen_seats])
                     st.success(f"'{target_name}'님은 이제 {seat_display}번 자리 중 하나에만 배치됩니다.")
+                    st.rerun()
                 else:
                     st.warning("자리를 1개 이상 선택해주세요.")
 
         with clear_col:
-            if st.button(f"'{target_name}' 조건 삭제"):
+            if st.button(f"'{target_name}' 조건 삭제", key="delete_constraint_btn"):
                 if target_name in st.session_state.seat_constraints:
                     del st.session_state.seat_constraints[target_name]
-                for seat_idx in range(total_seats):
-                    key = f"cst_{target_name}_{seat_idx}"
-                    if key in st.session_state:
-                        st.session_state[key] = False
-                st.success(f"'{target_name}'님의 조건이 삭제되었습니다.")
+                    st.success(f"'{target_name}'님의 조건이 삭제되었습니다.")
+                else:
+                    st.info(f"'{target_name}'님은 현재 등록된 조건이 없습니다.")
                 st.rerun()
 
         st.write("---")
