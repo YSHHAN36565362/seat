@@ -24,9 +24,8 @@ total_seats = sum(st.session_state.row_pairs) * 2
 if "seats" not in st.session_state or len(st.session_state.seats) != total_seats:
     st.session_state.seats = ["(빈자리)"] * total_seats
 
-# [핵심][수정] 물리적으로 아무도 앉을 수 없는 자리 번호들을 저장하는 집합(set)입니다.
-# 사용자 요청에 따라 17번(인덱스 16), 18번(인덱스 17) 자리를 기본값으로 비활성화합니다.
-# 화면에 보이는 번호는 1부터 시작하지만, 내부 자리 번호는 0부터 시작하므로 1을 뺀 값으로 저장합니다.
+# [핵심] 물리적으로 아무도 앉을 수 없는 자리 번호들을 저장하는 집합(set)입니다.
+# 기본값으로 17번(인덱스 16), 18번(인덱스 17) 자리를 비활성화합니다.
 if "disabled_seats" not in st.session_state:
     st.session_state.disabled_seats = {16, 17}
 
@@ -35,13 +34,21 @@ if "disabled_seats" not in st.session_state:
 if "forbidden_seats_map" not in st.session_state:
     st.session_state.forbidden_seats_map = {}
 
-# 마지막으로 실행한 배치 결과(자리번호 -> 이름)를 저장합니다.
+# 마지막으로 실행한 전체 배치 결과(자리번호 -> 이름)를 저장합니다.
 if "last_assignment_result" not in st.session_state:
     st.session_state.last_assignment_result = {}
 
-# 배치에 실패한 사람들(자리가 전부 막혀서 못 앉은 사람)을 저장합니다.
+# 전체 배치에 실패한 사람들(자리가 전부 막혀서 못 앉은 사람)을 저장합니다.
 if "last_failed_names" not in st.session_state:
     st.session_state.last_failed_names = []
+
+# [신규] 아직 자리를 받지 못한 "남은 인원" 명단입니다. "1명씩 뽑기" 기능에서 사용합니다.
+if "remaining_names" not in st.session_state:
+    st.session_state.remaining_names = []
+
+# [신규] 가장 마지막에 배치된 자리 번호입니다. 화면에서 강조 표시할 때 사용합니다.
+if "last_picked_seat_id" not in st.session_state:
+    st.session_state.last_picked_seat_id = -1
 
 
 # =========================================================================
@@ -96,6 +103,12 @@ def get_active_seat_ids(all_seat_ids: list, disabled_seats: set) -> list:
     return [seat_id for seat_id in all_seat_ids if seat_id not in disabled_seats]
 
 
+def get_currently_empty_seat_ids(all_seat_ids: list, disabled_seats: set, occupied_seat_ids: set) -> list:
+    # [신규] 비활성 자리와, 이미 누가 앉아있는 자리를 뺀 "지금 당장 앉을 수 있는 빈 자리"를 계산합니다.
+    active_seats = get_active_seat_ids(all_seat_ids, disabled_seats)
+    return [seat_id for seat_id in active_seats if seat_id not in occupied_seat_ids]
+
+
 # =========================================================================
 # 5. [단일 책임] 제약 조건(블랙리스트) 계산 함수
 # =========================================================================
@@ -106,14 +119,16 @@ def get_assignable_seats_for_person(person_name: str, currently_empty_seats: lis
 
 
 # =========================================================================
-# 6. [단일 책임] 랜덤 배치 실행 함수 (핵심 비즈니스 로직)
+# 6. [단일 책임] 랜덤 배치 실행 함수들 (핵심 비즈니스 로직)
 # =========================================================================
 
 def run_single_random_assignment(people_names: list, all_seat_ids: list, disabled_seats: set, forbidden_seats_map: dict):
+    # [기존] 여러 명을 한 번에 배치하는 함수입니다. "전체 랜덤 배치" 버튼에서 사용합니다.
     empty_seats = set(get_active_seat_ids(all_seat_ids, disabled_seats))
     seat_to_name = {}
     failed_names = []
 
+    # MRV(최소 잔여값) 휴리스틱: 앉을 수 있는 자리가 적은 사람일수록 먼저 배치합니다.
     people_with_seat_counts = []
     for name in people_names:
         assignable = get_assignable_seats_for_person(name, list(empty_seats), forbidden_seats_map)
@@ -132,6 +147,42 @@ def run_single_random_assignment(people_names: list, all_seat_ids: list, disable
             failed_names.append(name)
 
     return seat_to_name, failed_names
+
+
+def pick_one_person_and_assign_seat(
+    remaining_names: list,
+    all_seat_ids: list,
+    disabled_seats: set,
+    forbidden_seats_map: dict,
+    occupied_seat_ids: set
+):
+    """
+    [신규] 남은 인원 중 딱 한 명을 무작위로 뽑아서, 그 사람이 앉을 수 있는
+    빈 자리 중 하나에 무작위로 배치하는 함수입니다. "1명 랜덤 배치" 버튼에서 사용합니다.
+    반환값: (뽑힌 사람 이름 또는 None, 배치된 자리 번호 또는 None, 실패 여부 메시지)
+    """
+    if not remaining_names:
+        return None, None, "empty_pool"
+
+    # 지금 당장 앉을 수 있는 빈 자리 목록을 구합니다. (비활성 자리 + 이미 앉은 자리는 제외)
+    currently_empty_seats = get_currently_empty_seat_ids(all_seat_ids, disabled_seats, occupied_seat_ids)
+
+    if not currently_empty_seats:
+        return None, None, "no_empty_seat"
+
+    # 남은 인원 중에서 무작위로 한 명을 뽑습니다.
+    picked_name = random.choice(remaining_names)
+
+    # 뽑힌 사람이 실제로 앉을 수 있는 자리(금지 자리를 제외한 자리)를 계산합니다.
+    candidate_seats = get_assignable_seats_for_person(picked_name, currently_empty_seats, forbidden_seats_map)
+
+    if not candidate_seats:
+        # 이 사람은 뽑혔지만 앉을 자리가 없는 상태입니다. (자리를 소모하지 않고 실패 처리)
+        return picked_name, None, "no_seat_for_person"
+
+    # 후보 자리 중 하나를 무작위로 선택해서 배치를 확정합니다.
+    chosen_seat = random.choice(candidate_seats)
+    return picked_name, chosen_seat, "success"
 
 
 # =========================================================================
@@ -171,7 +222,7 @@ def render_front_illustration():
     return front_cols
 
 
-def render_seat_board(seat_to_name: dict, disabled_seats: set, row_pairs: list, highlight_forbidden: set = None):
+def render_seat_board(seat_to_name: dict, disabled_seats: set, row_pairs: list, highlight_forbidden: set = None, highlight_last_picked: int = -1):
     if highlight_forbidden is None:
         highlight_forbidden = set()
 
@@ -207,10 +258,18 @@ def render_seat_board(seat_to_name: dict, disabled_seats: set, row_pairs: list, 
                             )
                         else:
                             occupant = seat_to_name.get(seat_id, "(빈자리)")
-                            st.markdown(
-                                f"<div style='text-align:center; padding:15px 0;'>{occupant}</div>",
-                                unsafe_allow_html=True
-                            )
+                            # [신규] 방금 1명 뽑기로 배치된 자리는 초록색으로 강조합니다.
+                            if seat_id == highlight_last_picked:
+                                st.markdown(
+                                    f"<div style='text-align:center; color:white; background-color:#2e7d32; "
+                                    f"padding:15px 0; border-radius:4px; font-weight:bold;'>{occupant}</div>",
+                                    unsafe_allow_html=True
+                                )
+                            else:
+                                st.markdown(
+                                    f"<div style='text-align:center; padding:15px 0;'>{occupant}</div>",
+                                    unsafe_allow_html=True
+                                )
                         st.markdown(
                             f"<div style='text-align:center; font-size:11px; color:#888;'>#{seat_id + 1}</div>",
                             unsafe_allow_html=True
@@ -234,6 +293,18 @@ if len(current_names) <= total_seats:
 else:
     st.sidebar.error(f"입력 인원({len(current_names)}명)이 총 자릿수({total_seats}석)보다 많습니다.")
 
+# [신규] 명단을 "남은 인원 풀"로 등록하는 버튼입니다. 1명씩 뽑기 기능은 이 풀을 사용합니다.
+if st.sidebar.button("명단 등록 (자리 초기화)"):
+    st.session_state.remaining_names = current_names.copy()
+    st.session_state.seats = ["(빈자리)"] * total_seats
+    st.session_state.last_assignment_result = {}
+    st.session_state.last_failed_names = []
+    st.session_state.last_picked_seat_id = -1
+    st.sidebar.success(f"{len(current_names)}명이 등록되었습니다.")
+    st.rerun()
+
+st.sidebar.write(f"현재 남은 인원: {len(st.session_state.remaining_names)}명")
+
 menu = st.sidebar.radio("작업 선택", ["자리 배치 실행", "자리 구조/비활성 자리 설정", "인원별 금지 자리 설정"])
 
 title_col, config_col = st.columns([7, 3])
@@ -254,12 +325,12 @@ with config_col:
             st.session_state.row_pairs = temp_pairs
             new_total = sum(temp_pairs) * 2
             st.session_state.seats = ["(빈자리)"] * new_total
-            # 주의: 여기서 초기화하면 17,18번 기본 비활성 설정도 사라지고 빈 집합이 됩니다.
-            # 자리 구조를 바꾸더라도 17,18번 기본 비활성을 유지하고 싶다면 아래 줄로 유지합니다.
             st.session_state.disabled_seats = {16, 17} if new_total >= 18 else set()
             st.session_state.forbidden_seats_map = {}
             st.session_state.last_assignment_result = {}
             st.session_state.last_failed_names = []
+            st.session_state.remaining_names = []
+            st.session_state.last_picked_seat_id = -1
             st.rerun()
 
 render_front_illustration()
@@ -267,31 +338,72 @@ render_front_illustration()
 st.write("---")
 
 if menu == "자리 배치 실행":
-    st.write("아래 버튼을 누르면 금지 자리와 비활성 자리를 모두 반영해서 단 한 번 무작위로 배치합니다.")
+    st.write("먼저 사이드바에서 '명단 등록' 버튼을 눌러주세요. 그 다음 아래에서 한 명씩 뽑거나 전체를 한 번에 배치할 수 있습니다.")
 
-    if st.button("전체 랜덤 배치 실행", type="primary"):
-        if len(current_names) == 0:
-            st.warning("먼저 사이드바에서 이름 명단을 입력해주세요.")
-        else:
-            seat_to_name, failed_names = run_single_random_assignment(
-                current_names,
-                all_seat_ids,
-                st.session_state.disabled_seats,
-                st.session_state.forbidden_seats_map
-            )
-            st.session_state.last_assignment_result = seat_to_name
-            st.session_state.last_failed_names = failed_names
+    # 현재 자리에 이미 앉아있는 사람들의 자리 번호를 계산합니다. (1명씩 뽑기에서 중복 배치를 막기 위함)
+    occupied_seat_ids = {i for i, name in enumerate(st.session_state.seats) if name != "(빈자리)"}
 
-            if failed_names:
-                st.error(f"금지 자리 조건 때문에 배치 못 한 인원: {', '.join(failed_names)}")
+    btn_col1, btn_col2 = st.columns(2)
+
+    with btn_col1:
+        # [신규] 남은 인원 중 딱 한 명만 뽑아서 자리에 배치하는 버튼입니다.
+        if st.button("1명 랜덤 배치", type="primary"):
+            if not st.session_state.remaining_names:
+                st.warning("남은 인원이 없습니다. 사이드바에서 '명단 등록'을 먼저 눌러주세요.")
             else:
-                st.success("전원이 조건에 맞게 배치되었습니다!")
+                picked_name, chosen_seat, status = pick_one_person_and_assign_seat(
+                    st.session_state.remaining_names,
+                    all_seat_ids,
+                    st.session_state.disabled_seats,
+                    st.session_state.forbidden_seats_map,
+                    occupied_seat_ids
+                )
+
+                if status == "success":
+                    # 배치를 실제 좌석 배열에 반영하고, 남은 인원 목록에서 이 사람을 제거합니다.
+                    st.session_state.seats[chosen_seat] = picked_name
+                    st.session_state.remaining_names.remove(picked_name)
+                    st.session_state.last_picked_seat_id = chosen_seat
+                    st.success(f"'{picked_name}'님이 #{chosen_seat + 1}번 자리에 배치되었습니다.")
+                elif status == "no_empty_seat":
+                    st.error("빈 자리가 없어서 더 이상 배치할 수 없습니다.")
+                elif status == "no_seat_for_person":
+                    st.error(f"'{picked_name}'님은 금지 조건 때문에 남은 빈 자리 중 앉을 곳이 없습니다. 다시 시도해주세요.")
+
+    with btn_col2:
+        # [기존] 남은 인원 전체를 한 번에 배치하는 버튼입니다.
+        if st.button("전체 랜덤 배치 실행"):
+            if not st.session_state.remaining_names:
+                st.warning("남은 인원이 없습니다. 사이드바에서 '명단 등록'을 먼저 눌러주세요.")
+            else:
+                seat_to_name, failed_names = run_single_random_assignment(
+                    st.session_state.remaining_names,
+                    all_seat_ids,
+                    st.session_state.disabled_seats,
+                    st.session_state.forbidden_seats_map
+                )
+                # 계산된 결과를 실제 좌석 배열에 반영합니다.
+                for seat_id, name in seat_to_name.items():
+                    st.session_state.seats[seat_id] = name
+                # 배치에 성공한 사람들은 남은 인원 목록에서 제거합니다.
+                st.session_state.remaining_names = [
+                    name for name in st.session_state.remaining_names if name not in seat_to_name.values()
+                ]
+                st.session_state.last_assignment_result = seat_to_name
+                st.session_state.last_failed_names = failed_names
+                st.session_state.last_picked_seat_id = -1
+
+                if failed_names:
+                    st.error(f"금지 자리 조건 때문에 배치 못 한 인원: {', '.join(failed_names)}")
+                else:
+                    st.success("남은 전원이 조건에 맞게 배치되었습니다!")
 
     st.write("---")
     render_seat_board(
-        st.session_state.last_assignment_result,
+        {i: name for i, name in enumerate(st.session_state.seats) if name != "(빈자리)"},
         st.session_state.disabled_seats,
-        st.session_state.row_pairs
+        st.session_state.row_pairs,
+        highlight_last_picked=st.session_state.last_picked_seat_id
     )
 
 elif menu == "자리 구조/비활성 자리 설정":
