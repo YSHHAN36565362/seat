@@ -6,14 +6,11 @@ import re
 # =========================================================================
 # 1. 페이지 기본 설정
 # =========================================================================
-st.set_page_config(page_title="랜덤 자리 배치 (블랙리스트 버전)", layout="wide")
+st.set_page_config(page_title="자리", layout="wide")
 
 
 # =========================================================================
 # 2. 세션 상태(session_state) 초기화
-# -------------------------------------------------------------------------
-# Streamlit은 버튼을 누를 때마다 파일 전체를 위에서 아래로 다시 실행합니다.
-# 그래서 "다시 실행돼도 사라지면 안 되는 값"들은 st.session_state에 저장해야 합니다.
 # =========================================================================
 
 # 각 줄(행)에 몇 쌍(짝꿍)이 앉는지 저장하는 리스트입니다. 예: [4, 4, 3] = 1행 4쌍, 2행 4쌍, 3행 3쌍
@@ -27,9 +24,11 @@ total_seats = sum(st.session_state.row_pairs) * 2
 if "seats" not in st.session_state or len(st.session_state.seats) != total_seats:
     st.session_state.seats = ["(빈자리)"] * total_seats
 
-# [핵심] 물리적으로 아무도 앉을 수 없는 자리 번호들을 저장하는 집합(set)입니다.
+# [핵심][수정] 물리적으로 아무도 앉을 수 없는 자리 번호들을 저장하는 집합(set)입니다.
+# 사용자 요청에 따라 17번(인덱스 16), 18번(인덱스 17) 자리를 기본값으로 비활성화합니다.
+# 화면에 보이는 번호는 1부터 시작하지만, 내부 자리 번호는 0부터 시작하므로 1을 뺀 값으로 저장합니다.
 if "disabled_seats" not in st.session_state:
-    st.session_state.disabled_seats = set()
+    st.session_state.disabled_seats = {16, 17}
 
 # [핵심] 특정 사람이 앉을 수 없는 자리를 저장하는 딕셔너리입니다.
 # 형태: {"홍길동": {2, 5, 9}} -> 홍길동은 2,5,9번 자리에 못 앉음
@@ -94,7 +93,6 @@ def get_all_seat_ids(row_pairs: list) -> list:
 
 
 def get_active_seat_ids(all_seat_ids: list, disabled_seats: set) -> list:
-    # 물리적으로 비활성화된 자리를 제외한, 실제로 사용 가능한 자리 목록입니다.
     return [seat_id for seat_id in all_seat_ids if seat_id not in disabled_seats]
 
 
@@ -116,7 +114,6 @@ def run_single_random_assignment(people_names: list, all_seat_ids: list, disable
     seat_to_name = {}
     failed_names = []
 
-    # MRV(최소 잔여값) 휴리스틱: 앉을 수 있는 자리가 적은 사람일수록 먼저 배치합니다.
     people_with_seat_counts = []
     for name in people_names:
         assignable = get_assignable_seats_for_person(name, list(empty_seats), forbidden_seats_map)
@@ -153,7 +150,6 @@ def render_name_input_sidebar():
 
 
 def render_front_illustration():
-    # [기존 구조 유지] 칠판과 TV 이미지를 화면 상단에 그대로 보여주는 부분입니다.
     front_cols = st.columns([1, 2, 1, 1.5])
 
     with front_cols[1]:
@@ -176,12 +172,6 @@ def render_front_illustration():
 
 
 def render_seat_board(seat_to_name: dict, disabled_seats: set, row_pairs: list, highlight_forbidden: set = None):
-    """
-    좌석 배치도를 그려주는 공용 함수입니다.
-    - seat_to_name: 배치 결과를 보여줄 때 사용 (없으면 빈 딕셔너리 전달)
-    - disabled_seats: 물리적으로 비활성화된 자리 (회색 '사용불가' 표시)
-    - highlight_forbidden: 특정 인원의 금지 자리 설정 화면에서, 그 사람이 못 앉는 자리를 빨간색으로 강조 표시할 때 사용
-    """
     if highlight_forbidden is None:
         highlight_forbidden = set()
 
@@ -204,14 +194,12 @@ def render_seat_board(seat_to_name: dict, disabled_seats: set, row_pairs: list, 
                 for local_idx, seat_id in enumerate(seat_ids):
                     with inner_cols[local_idx]:
                         if seat_id in disabled_seats:
-                            # 물리적으로 사용 불가능한 자리는 회색 배경으로 표시합니다.
                             st.markdown(
                                 "<div style='text-align:center; color:#999; background-color:#eee; "
                                 "padding:15px 0; border-radius:4px;'>사용불가</div>",
                                 unsafe_allow_html=True
                             )
                         elif seat_id in highlight_forbidden:
-                            # 지금 설정 중인 사람이 못 앉는 자리는 빨간색으로 강조합니다.
                             st.markdown(
                                 "<div style='text-align:center; color:#c62828; background-color:#ffebee; "
                                 "padding:15px 0; border-radius:4px;'>금지</div>",
@@ -266,13 +254,14 @@ with config_col:
             st.session_state.row_pairs = temp_pairs
             new_total = sum(temp_pairs) * 2
             st.session_state.seats = ["(빈자리)"] * new_total
-            st.session_state.disabled_seats = set()
+            # 주의: 여기서 초기화하면 17,18번 기본 비활성 설정도 사라지고 빈 집합이 됩니다.
+            # 자리 구조를 바꾸더라도 17,18번 기본 비활성을 유지하고 싶다면 아래 줄로 유지합니다.
+            st.session_state.disabled_seats = {16, 17} if new_total >= 18 else set()
             st.session_state.forbidden_seats_map = {}
             st.session_state.last_assignment_result = {}
             st.session_state.last_failed_names = []
             st.rerun()
 
-# [기존 구조 유지] 칠판/TV 이미지는 항상 상단에 표시됩니다.
 render_front_illustration()
 
 st.write("---")
@@ -306,7 +295,7 @@ if menu == "자리 배치 실행":
     )
 
 elif menu == "자리 구조/비활성 자리 설정":
-    st.write("물리적으로 아무도 앉을 수 없는 자리를 지정합니다. 아래 배치도를 보면서 선택하세요.")
+    st.write("물리적으로 아무도 앉을 수 없는 자리를 지정합니다. 아래 배치도를 보면서 선택하세요. (기본값: 17, 18번 비활성)")
 
     seat_options = all_seat_ids
     seat_label_map = {s: f"{s + 1}번" for s in seat_options}
@@ -326,7 +315,6 @@ elif menu == "자리 구조/비활성 자리 설정":
 
     st.write("---")
     st.write("현재 좌석 구조 (회색 '사용불가'가 지금 선택된 비활성 자리입니다)")
-    # 저장 버튼을 누르기 전, 실시간으로 고르고 있는 자리도 바로 배치도에 반영해서 보여줍니다.
     render_seat_board({}, set(chosen_disabled), st.session_state.row_pairs)
 
 else:
@@ -338,13 +326,11 @@ else:
         unique_names = sorted(set(current_names))
         target_name = st.selectbox("금지 자리를 설정할 사람", unique_names, key="forbidden_target_select")
 
-        # 이미 물리적으로 비활성화된 자리는 선택 대상에서 뺍니다. (중복 관리 방지)
         available_for_selection = [s for s in all_seat_ids if s not in st.session_state.disabled_seats]
         seat_label_map = {s: f"{s + 1}번" for s in available_for_selection}
 
         current_forbidden = list(st.session_state.forbidden_seats_map.get(target_name, set()))
 
-        # [요청 기능] "모두 선택" 버튼: 이 사람이 모든 자리에 앉지 못하도록 한 번에 전체를 금지 처리합니다.
         def select_all_forbidden_for_target():
             st.session_state[f"forbidden_multiselect_{target_name}"] = list(available_for_selection)
 
@@ -367,7 +353,6 @@ else:
 
         st.write("---")
         st.write(f"현재 좌석 구조 (빨간색 '금지'가 '{target_name}'님이 지금 선택 중인 금지 자리입니다)")
-        # 저장 전에도 실시간으로 선택 중인 금지 자리를 배치도에 바로 반영해서 보여줍니다.
         render_seat_board(
             {},
             st.session_state.disabled_seats,
