@@ -6,7 +6,6 @@ import re
 # =========================================================================
 # 1. 페이지 기본 설정
 # =========================================================================
-# 브라우저 탭 제목과 화면을 넓게 쓰도록 설정합니다.
 st.set_page_config(page_title="랜덤 자리 배치 (블랙리스트 버전)", layout="wide")
 
 
@@ -29,12 +28,11 @@ if "seats" not in st.session_state or len(st.session_state.seats) != total_seats
     st.session_state.seats = ["(빈자리)"] * total_seats
 
 # [핵심] 물리적으로 아무도 앉을 수 없는 자리 번호들을 저장하는 집합(set)입니다.
-# 예: 기둥에 가려진 자리, 고장 난 의자 등 - 모든 사람에게 공통으로 적용됩니다.
 if "disabled_seats" not in st.session_state:
     st.session_state.disabled_seats = set()
 
 # [핵심] 특정 사람이 앉을 수 없는 자리를 저장하는 딕셔너리입니다.
-# 형태: {"홍길동": {2, 5, 9}, "김철수": {0, 1}} -> 홍길동은 2,5,9번 자리에 못 앉음
+# 형태: {"홍길동": {2, 5, 9}} -> 홍길동은 2,5,9번 자리에 못 앉음
 if "forbidden_seats_map" not in st.session_state:
     st.session_state.forbidden_seats_map = {}
 
@@ -49,12 +47,9 @@ if "last_failed_names" not in st.session_state:
 
 # =========================================================================
 # 3. [단일 책임] 이름 텍스트 처리 관련 함수들
-# -------------------------------------------------------------------------
-# 이 함수들은 "텍스트 문자열을 다루는 일"만 담당합니다.
 # =========================================================================
 
 def format_names_with_numbers(text: str) -> str:
-    # 빈 줄은 걸러내고, 줄 앞의 "1. " 같은 기존 번호를 지운 뒤 새로 번호를 붙입니다.
     lines = [line for line in text.split('\n') if line.strip()]
     cleaned_lines = [re.sub(r'^\d+[\.\)\]\s]+', '', line.strip()) for line in lines]
     numbered_lines = [f"{i + 1}. {name}" for i, name in enumerate(cleaned_lines)]
@@ -62,20 +57,17 @@ def format_names_with_numbers(text: str) -> str:
 
 
 def parse_names_from_raw_text(raw_text: str) -> list:
-    # 텍스트를 줄 단위로 나누고, 앞의 번호(1. 2. 등)를 제거해서 순수 이름 리스트만 반환합니다.
     lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
     names = [re.sub(r'^\d+[\.\)\]\s]+', '', line) for line in lines]
     return names
 
 
 def on_text_area_change():
-    # 사용자가 이름 입력창을 수정하고 다른 곳을 클릭하면 자동으로 번호를 다시 매깁니다.
     if "names_textarea" in st.session_state:
         st.session_state["names_textarea"] = format_names_with_numbers(st.session_state["names_textarea"])
 
 
 def load_names_from_txt_file(file_name: str):
-    # 지정한 txt 파일을 읽어서 이름 입력창에 넣어줍니다. 파일이 없으면 오류 메시지를 보여줍니다.
     if os.path.exists(file_name):
         with open(file_name, "r", encoding="utf-8") as f:
             st.session_state["names_textarea"] = format_names_with_numbers(f.read())
@@ -84,7 +76,6 @@ def load_names_from_txt_file(file_name: str):
 
 
 def shuffle_names_in_textarea():
-    # 입력창에 있는 이름들의 순서만 무작위로 섞습니다. (자리 배치가 아니라 명단 순서 섞기 용도)
     if "names_textarea" in st.session_state:
         raw_text = st.session_state["names_textarea"]
         names = parse_names_from_raw_text(raw_text)
@@ -95,84 +86,52 @@ def shuffle_names_in_textarea():
 
 # =========================================================================
 # 4. [단일 책임] 자리(좌석) 구조 관련 함수들
-# -------------------------------------------------------------------------
-# 이 함수들은 "자리 번호와 자리 배치 구조를 계산하는 일"만 담당합니다.
 # =========================================================================
 
 def get_all_seat_ids(row_pairs: list) -> list:
-    # row_pairs = [4, 4, 3] 이면 총 자리 번호 0번부터 (합계*2 - 1)번까지 리스트를 만듭니다.
     total = sum(row_pairs) * 2
     return list(range(total))
 
 
 def get_active_seat_ids(all_seat_ids: list, disabled_seats: set) -> list:
-    # 물리적으로 비활성화(고장/사용불가) 처리된 자리를 제외한, 실제로 사용 가능한 자리 목록입니다.
+    # 물리적으로 비활성화된 자리를 제외한, 실제로 사용 가능한 자리 목록입니다.
     return [seat_id for seat_id in all_seat_ids if seat_id not in disabled_seats]
 
 
 # =========================================================================
 # 5. [단일 책임] 제약 조건(블랙리스트) 계산 함수
-# -------------------------------------------------------------------------
-# 이 함수는 "이 사람이 앉을 수 있는 자리가 몇 개인지 계산하는 일"만 담당합니다.
 # =========================================================================
 
-def get_assignable_seats_for_person(
-    person_name: str,
-    currently_empty_seats: list,
-    forbidden_seats_map: dict
-) -> list:
-    # 이 사람의 개인 금지 자리 목록을 가져옵니다. 없으면 빈 집합을 사용합니다.
+def get_assignable_seats_for_person(person_name: str, currently_empty_seats: list, forbidden_seats_map: dict) -> list:
     person_forbidden = forbidden_seats_map.get(person_name, set())
-    # "현재 비어있는 자리" 중에서, "이 사람이 금지된 자리"가 아닌 자리만 남깁니다.
     return [seat_id for seat_id in currently_empty_seats if seat_id not in person_forbidden]
 
 
 # =========================================================================
 # 6. [단일 책임] 랜덤 배치 실행 함수 (핵심 비즈니스 로직)
-# -------------------------------------------------------------------------
-# 이 함수는 오직 "누구를 어느 자리에 앉힐지 계산하는 일"만 담당하고,
-# 화면을 그리거나 파일을 읽는 등의 다른 일은 절대 하지 않습니다. (단일 책임 원칙)
 # =========================================================================
 
-def run_single_random_assignment(
-    people_names: list,
-    all_seat_ids: list,
-    disabled_seats: set,
-    forbidden_seats_map: dict
-):
-    # 물리적으로 막힌 자리를 뺀, 실제로 앉을 수 있는 전체 빈 자리 목록을 만듭니다.
+def run_single_random_assignment(people_names: list, all_seat_ids: list, disabled_seats: set, forbidden_seats_map: dict):
     empty_seats = set(get_active_seat_ids(all_seat_ids, disabled_seats))
-
-    # 최종 결과를 담을 딕셔너리입니다. {자리번호: 이름}
     seat_to_name = {}
-    # 자리가 부족해서 끝내 배치 못 한 사람 이름을 담을 리스트입니다.
     failed_names = []
 
-    # ---------------------------------------------------------------
-    # MRV(최소 잔여값) 휴리스틱: 앉을 수 있는 자리가 적은 사람일수록
-    # 먼저 배치해야 나중에 "자리가 없어서 못 앉는" 상황을 줄일 수 있습니다.
-    # ---------------------------------------------------------------
+    # MRV(최소 잔여값) 휴리스틱: 앉을 수 있는 자리가 적은 사람일수록 먼저 배치합니다.
     people_with_seat_counts = []
     for name in people_names:
         assignable = get_assignable_seats_for_person(name, list(empty_seats), forbidden_seats_map)
         people_with_seat_counts.append((name, len(assignable)))
 
-    # 앉을 수 있는 자리 수가 적은 사람부터 처리하도록 정렬합니다.
     people_with_seat_counts.sort(key=lambda pair: pair[1])
     sorted_people = [pair[0] for pair in people_with_seat_counts]
 
-    # 정렬된 순서대로 한 명씩 랜덤 자리를 배정합니다.
     for name in sorted_people:
-        # 현재 남아있는 빈 자리 중에서, 이 사람이 앉을 수 있는 자리만 골라냅니다.
         candidate_seats = get_assignable_seats_for_person(name, list(empty_seats), forbidden_seats_map)
-
         if candidate_seats:
-            # 후보 자리 중 하나를 무작위로 뽑아서 배정합니다.
             chosen_seat = random.choice(candidate_seats)
             seat_to_name[chosen_seat] = name
             empty_seats.remove(chosen_seat)
         else:
-            # 앉을 수 있는 자리가 하나도 없으면 실패 목록에 넣습니다.
             failed_names.append(name)
 
     return seat_to_name, failed_names
@@ -180,12 +139,9 @@ def run_single_random_assignment(
 
 # =========================================================================
 # 7. [단일 책임] 화면(UI)을 그리는 함수들
-# -------------------------------------------------------------------------
-# 이 함수들은 "화면에 무엇을 보여줄지"만 담당하고, 데이터를 계산하지 않습니다.
 # =========================================================================
 
 def render_name_input_sidebar():
-    # 사이드바 상단에 이름 명단을 입력받는 UI를 그립니다.
     st.sidebar.title("이름 명단 입력")
     st.sidebar.write(f"총 {total_seats}석 중 물리적으로 비활성화된 자리를 제외하고 배치됩니다.")
 
@@ -196,8 +152,39 @@ def render_name_input_sidebar():
     st.sidebar.text_area("명단 (한 줄에 한 명씩)", height=280, key="names_textarea", on_change=on_text_area_change)
 
 
-def render_seat_board(seat_to_name: dict, disabled_seats: set, row_pairs: list):
-    # 강의실 모양 그대로 자리 배치 결과를 화면에 그립니다.
+def render_front_illustration():
+    # [기존 구조 유지] 칠판과 TV 이미지를 화면 상단에 그대로 보여주는 부분입니다.
+    front_cols = st.columns([1, 2, 1, 1.5])
+
+    with front_cols[1]:
+        st.markdown(
+            "<div style='text-align: center;'>"
+            "<img src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEi4I4zFnoGWku6HlvRHMoq5lU_eTEQR51_U0Uc1aDC9yom6QiLmTHPwulXQcQ0-FbCR_OFSLLwX-qdM29tW-1nnom99XsEPOvdLezDdZXE27Qqj2Y4TMC2JbL1e7njxi5UX1iNyA9b93M8C/w1200-h630-p-k-no-nu/school_class_woman_aseru.png' style='width: 50%;'>"
+            "<br><span style='color: gray; font-size: 14px;'>칠판</span></div>",
+            unsafe_allow_html=True
+        )
+
+    with front_cols[2]:
+        st.markdown(
+            "<div style='text-align: center;'>"
+            "<img src='https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ_DZA5M8KH80YmEcHxZxumZnYGPyDQNcD0fkFQe3Q39zmtrho&s' style='width: 50%;'>"
+            "<br><span style='color: gray; font-size: 14px;'>TV</span></div>",
+            unsafe_allow_html=True
+        )
+
+    return front_cols
+
+
+def render_seat_board(seat_to_name: dict, disabled_seats: set, row_pairs: list, highlight_forbidden: set = None):
+    """
+    좌석 배치도를 그려주는 공용 함수입니다.
+    - seat_to_name: 배치 결과를 보여줄 때 사용 (없으면 빈 딕셔너리 전달)
+    - disabled_seats: 물리적으로 비활성화된 자리 (회색 '사용불가' 표시)
+    - highlight_forbidden: 특정 인원의 금지 자리 설정 화면에서, 그 사람이 못 앉는 자리를 빨간색으로 강조 표시할 때 사용
+    """
+    if highlight_forbidden is None:
+        highlight_forbidden = set()
+
     start_idx = 0
     for row_index, pair_count in enumerate(row_pairs):
         st.markdown(f"**{row_index + 1}행**")
@@ -217,9 +204,17 @@ def render_seat_board(seat_to_name: dict, disabled_seats: set, row_pairs: list):
                 for local_idx, seat_id in enumerate(seat_ids):
                     with inner_cols[local_idx]:
                         if seat_id in disabled_seats:
-                            # 물리적으로 사용 불가능한 자리는 회색으로 표시합니다.
+                            # 물리적으로 사용 불가능한 자리는 회색 배경으로 표시합니다.
                             st.markdown(
-                                f"<div style='text-align:center; color:#aaa; padding:15px 0;'>사용불가</div>",
+                                "<div style='text-align:center; color:#999; background-color:#eee; "
+                                "padding:15px 0; border-radius:4px;'>사용불가</div>",
+                                unsafe_allow_html=True
+                            )
+                        elif seat_id in highlight_forbidden:
+                            # 지금 설정 중인 사람이 못 앉는 자리는 빨간색으로 강조합니다.
+                            st.markdown(
+                                "<div style='text-align:center; color:#c62828; background-color:#ffebee; "
+                                "padding:15px 0; border-radius:4px;'>금지</div>",
                                 unsafe_allow_html=True
                             )
                         else:
@@ -251,10 +246,36 @@ if len(current_names) <= total_seats:
 else:
     st.sidebar.error(f"입력 인원({len(current_names)}명)이 총 자릿수({total_seats}석)보다 많습니다.")
 
-# 왼쪽 메뉴에서 화면 전환용 탭을 고릅니다.
 menu = st.sidebar.radio("작업 선택", ["자리 배치 실행", "자리 구조/비활성 자리 설정", "인원별 금지 자리 설정"])
 
-st.title("랜덤 자리 배치 프로그램 (블랙리스트 방식)")
+title_col, config_col = st.columns([7, 3])
+with title_col:
+    st.title("랜덤 자리 배치 프로그램 (블랙리스트 방식)")
+
+with config_col:
+    with st.expander("자리 배치 설정 (클릭)"):
+        st.write("각 줄에 몇 쌍(2명=1쌍)이 앉을지 수정할 수 있습니다.")
+        temp_rows = st.number_input("총 행(가로줄) 개수", min_value=1, max_value=10, value=len(st.session_state.row_pairs))
+        temp_pairs = []
+        for i in range(temp_rows):
+            default_val = st.session_state.row_pairs[i] if i < len(st.session_state.row_pairs) else 4
+            val = st.number_input(f"{i + 1}행 짝꿍 수", min_value=1, max_value=10, value=default_val, key=f"row_input_{i}")
+            temp_pairs.append(val)
+
+        if st.button("설정 적용 및 초기화"):
+            st.session_state.row_pairs = temp_pairs
+            new_total = sum(temp_pairs) * 2
+            st.session_state.seats = ["(빈자리)"] * new_total
+            st.session_state.disabled_seats = set()
+            st.session_state.forbidden_seats_map = {}
+            st.session_state.last_assignment_result = {}
+            st.session_state.last_failed_names = []
+            st.rerun()
+
+# [기존 구조 유지] 칠판/TV 이미지는 항상 상단에 표시됩니다.
+render_front_illustration()
+
+st.write("---")
 
 if menu == "자리 배치 실행":
     st.write("아래 버튼을 누르면 금지 자리와 비활성 자리를 모두 반영해서 단 한 번 무작위로 배치합니다.")
@@ -285,27 +306,7 @@ if menu == "자리 배치 실행":
     )
 
 elif menu == "자리 구조/비활성 자리 설정":
-    st.write("행(가로줄) 개수와 각 행의 짝꿍 수를 정하고, 물리적으로 아무도 앉을 수 없는 자리를 지정합니다.")
-
-    temp_rows = st.number_input("총 행(가로줄) 개수", min_value=1, max_value=10, value=len(st.session_state.row_pairs))
-    temp_pairs = []
-    for i in range(temp_rows):
-        default_val = st.session_state.row_pairs[i] if i < len(st.session_state.row_pairs) else 4
-        val = st.number_input(f"{i + 1}행 짝꿍 수", min_value=1, max_value=10, value=default_val, key=f"row_input_{i}")
-        temp_pairs.append(val)
-
-    if st.button("자리 구조 적용 (초기화됩니다)"):
-        st.session_state.row_pairs = temp_pairs
-        new_total = sum(temp_pairs) * 2
-        st.session_state.seats = ["(빈자리)"] * new_total
-        st.session_state.disabled_seats = set()
-        st.session_state.forbidden_seats_map = {}
-        st.session_state.last_assignment_result = {}
-        st.session_state.last_failed_names = []
-        st.rerun()
-
-    st.write("---")
-    st.write("물리적으로 사용할 수 없는 자리 번호를 모두 선택하세요. (예: 기둥에 가려진 자리)")
+    st.write("물리적으로 아무도 앉을 수 없는 자리를 지정합니다. 아래 배치도를 보면서 선택하세요.")
 
     seat_options = all_seat_ids
     seat_label_map = {s: f"{s + 1}번" for s in seat_options}
@@ -324,10 +325,12 @@ elif menu == "자리 구조/비활성 자리 설정":
         st.rerun()
 
     st.write("---")
-    render_seat_board({}, st.session_state.disabled_seats, st.session_state.row_pairs)
+    st.write("현재 좌석 구조 (회색 '사용불가'가 지금 선택된 비활성 자리입니다)")
+    # 저장 버튼을 누르기 전, 실시간으로 고르고 있는 자리도 바로 배치도에 반영해서 보여줍니다.
+    render_seat_board({}, set(chosen_disabled), st.session_state.row_pairs)
 
 else:
-    st.write("특정 인원이 앉을 수 없는 자리를 지정합니다. (블랙리스트 방식: 여기서 선택한 자리에는 절대 앉지 않습니다)")
+    st.write("특정 인원이 앉을 수 없는 자리를 지정합니다. (여기서 선택한 자리에는 절대 앉지 않습니다)")
 
     if not current_names:
         st.info("먼저 사이드바에서 명단을 입력해주세요.")
@@ -335,16 +338,13 @@ else:
         unique_names = sorted(set(current_names))
         target_name = st.selectbox("금지 자리를 설정할 사람", unique_names, key="forbidden_target_select")
 
-        # 이미 물리적으로 비활성화된 자리는 애초에 선택 대상에서 뺍니다. (중복 관리 방지)
+        # 이미 물리적으로 비활성화된 자리는 선택 대상에서 뺍니다. (중복 관리 방지)
         available_for_selection = [s for s in all_seat_ids if s not in st.session_state.disabled_seats]
         seat_label_map = {s: f"{s + 1}번" for s in available_for_selection}
 
         current_forbidden = list(st.session_state.forbidden_seats_map.get(target_name, set()))
 
-        # ---------------------------------------------------------------
-        # [요청 기능] "모두 선택" 버튼: 이 사람이 모든 자리에 앉지 못하도록
-        # 한 번에 전체 자리를 금지 목록에 넣을 수 있게 해주는 편의 기능입니다.
-        # ---------------------------------------------------------------
+        # [요청 기능] "모두 선택" 버튼: 이 사람이 모든 자리에 앉지 못하도록 한 번에 전체를 금지 처리합니다.
         def select_all_forbidden_for_target():
             st.session_state[f"forbidden_multiselect_{target_name}"] = list(available_for_selection)
 
@@ -365,6 +365,17 @@ else:
             key=f"forbidden_multiselect_{target_name}"
         )
 
+        st.write("---")
+        st.write(f"현재 좌석 구조 (빨간색 '금지'가 '{target_name}'님이 지금 선택 중인 금지 자리입니다)")
+        # 저장 전에도 실시간으로 선택 중인 금지 자리를 배치도에 바로 반영해서 보여줍니다.
+        render_seat_board(
+            {},
+            st.session_state.disabled_seats,
+            st.session_state.row_pairs,
+            highlight_forbidden=set(chosen_forbidden)
+        )
+
+        st.write("---")
         if st.button("금지 자리 저장"):
             st.session_state.forbidden_seats_map[target_name] = set(chosen_forbidden)
             st.success(f"'{target_name}'님은 이제 {len(chosen_forbidden)}개 자리에 앉을 수 없습니다.")
